@@ -1,0 +1,8 @@
+openai
+uvicorn
+fastapi
+python-multipart
+loguru
+deepgram-sdk
+websocket
+nest-asyncio

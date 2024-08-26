@@ -1,0 +1,53 @@
+name: Build and Push to ACR assistant upload
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  GITHUB_SHA: ${{ github.sha }} 
+  GITHUB_REF: ${{ github.ref }} 
+
+
+jobs:
+  continuous-integration:
+        runs-on: ubuntu-latest
+        steps:
+        - name: 'Checkout GitHub Action'
+          uses: actions/checkout@main
+  
+        - name: azure docker login
+          run: |
+              sudo docker login ${{ secrets.REGISTRY_URL }} --username ${{ secrets.REGISTRY_USERNAME }} --password ${{ secrets.REGISTRY_PASSWORD }}
+              sudo docker build -t ${{ secrets.REGISTRY_URL }}/assistant_backend:${{ github.sha }} .
+              sudo docker push ${{ secrets.REGISTRY_URL }}/assistant_backend:${{ github.sha }}
+
+  continuous-deployment:
+      needs: continuous-integration
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v2
+        - name: Azure login
+          id: login
+          uses: azure/login@v1.4.3
+          with:
+            creds: ${{ secrets.AZ_CREDS }}
+        - name: Set AKS context
+          id: set-context
+          uses: azure/aks-set-context@v3
+          with:
+            resource-group: '${{ secrets.AZ_RESOURCE_GROUP }}' 
+            cluster-name: '${{ secrets.AZ_CLUSTER_NAME }}'
+        - name: Setup kubectl
+          id: install-kubectl
+          uses: azure/setup-kubectl@v3
+        - name: Deploy to AKS
+          id: deploy-aks
+          uses: Azure/k8s-deploy@v4
+          with:
+            namespace: 'speech-backend'
+            manifests: |
+              k8s/deploy.yml
+            images: '${{ secrets.REGISTRY_URL }}/assistant_backend:${{ github.sha }}'
